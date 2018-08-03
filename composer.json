@@ -1,0 +1,15 @@
+{
+    "name": "oem/copier",
+    "authors": [
+        {
+            "name": "Alex",
+            "email": "alkul93123@gmail.com"
+        }
+    ],
+    "require": {
+        "illuminate/database": "^5.4",
+        "illuminate/log": "^5.4",
+        "illuminate/events": "^5.4",
+        "doctrine/dbal": "^2.5"
+    }
+}
