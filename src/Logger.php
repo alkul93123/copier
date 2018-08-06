@@ -2,6 +2,7 @@
 
 namespace src;
 
+use src\FileSystemHelper;
 use Illuminate\Log\Writer;
 use Monolog\Logger as Monolog;
 
@@ -84,10 +85,16 @@ class Logger {
      *
      * @return Illuminate\Log\Writer
      */
-    public function initializeLogger($path)
+    protected static function initializeLogger($path)
     {
         $log = new Writer(new Monolog(self::APP_NAME));
-        $log->useFiles(LOG_PATH . $path);
+        if (!defined('LOG_PATH')) {
+            $defaultPath = dirname(dirname(__FILE__)) . '/logs/';
+            $log->useFiles(FileSystemHelper::resolvePath($defaultPath . '/' . $path));
+            return $log;
+        }
+
+        $log->useFiles(FileSystemHelper::resolvePath(LOG_PATH . '/' . $path));
         return $log;
     }
 }
