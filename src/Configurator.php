@@ -183,6 +183,13 @@ class Configurator
         if (!file_exists($this->config['logPath'])) {
             throw new ConfigException("Dir " . $this->config['logPath'] . ' for logs not found!', 1);
         }
+        if (!isset($this->config['testDumpPath'])) {
+            throw new ConfigException("Configuration for 'testDumpPath' not found!", 1);
+        }
+
+        if (!file_exists($this->config['testDumpPath'])) {
+            throw new ConfigException("Dir " . $this->config['testDumpPath'] . ' for dumps not found!', 1);
+        }
 
         if (!isset($this->config['advancedLog']) || !is_bool($this->config['advancedLog'])) {
             throw new ConfigException("Configuration for 'advancedLog' is required and must be bool!", 1);
@@ -190,6 +197,14 @@ class Configurator
 
         if (!isset($this->config['consoleOutput']) || !is_bool($this->config['consoleOutput'])) {
             throw new ConfigException("Configuration for 'consoleOutput' is required and must be bool!", 1);
+        }
+
+        if (!isset($this->config['makeTestDump']) || !is_bool($this->config['makeTestDump'])) {
+            throw new ConfigException("Configuration for 'consoleOutput' is required and must be bool!", 1);
+        }
+
+        if (!in_array($this->config['highload'], ['low', 'middle', 'hard', 'full'])) {
+            throw new ConfigException("Configuration for 'highload' may only 'low', 'middle', 'hard', 'full'!", 1);
         }
     }
 }

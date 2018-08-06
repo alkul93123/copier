@@ -6,6 +6,7 @@ require 'vendor/autoload.php';
 spl_autoload_register(['Autoloader', 'autoload'], true, true);
 
 use src\Copier;
+use src\Logger;
 use src\IOHelper;
 use src\Configurator;
 use exceptions\ConfigException;

@@ -14,12 +14,6 @@ use src\Logger;
 class Copier
 {
     /**
-     * @var int Лимит записей для больших таблиц, что бы не загружать память,
-     * будем брать по 200 записей из таблицы.
-     */
-    const LIMIT = 500;
-
-    /**
      * @var int
      */
     protected $offset = 0;
@@ -44,10 +38,17 @@ class Copier
      */
     protected $connections = [];
 
+    /**
+     * @var int Лимит записей для больших таблиц, что бы не загружать память,
+     * будем брать по 200 записей из таблицы.
+     */
+    private $limit = 200;
+
     public function __construct(Configurator $configurator)
     {
         $this->configurator = $configurator;
         $this->comparator = new Comparator();
+        $this->configure();
     }
 
     /**
@@ -63,8 +64,12 @@ class Copier
         $tables = $this->masterConnection->getSchemaManager()->listTables();
 
         foreach ($this->connections as $key => $connection) {
+            if ($this->configurator->config['makeTestDump']) {
+                $this->makeDump($connection);
+            }
+
             $this->compareData($connection, $tables);
-            $this->output("Database {$key} was synchronized!\n");
+            $this->output("Database '{$key}' was synchronized!\n\n");
         }
 
         $this->output("Complite!\n");
@@ -81,6 +86,7 @@ class Copier
     {
         $countTable = count($tables);
         foreach ($tables as $key => $table) {
+            $this->clearTable($connection, $table->getName());
             $firstColumn = array_shift($table->getColumns());
             $countRecords = $this->masterConnection->fetchAssoc("SELECT count(*) as count FROM {$table->getName()}");
 
@@ -90,7 +96,7 @@ class Copier
             }
 
             $this->offset = 0;
-            $this->output("Table {$table->getName()} was synchronized! [{$key}/{$countTable}]\n");
+            $this->output("Table '{$table->getName()}' was synchronized! [{$key}/{$countTable}]\n");
         }
     }
 
@@ -121,6 +127,42 @@ class Copier
                 $connection->update($table->getName(), $insertArray, [$firstColumn->getName() => $items[$firstColumn->getName()]]);
             }
         }
+    }
+
+    /**
+     * Очищаем таблицу, перед тем как заносить данные
+     *
+     * @param \Doctrine\DBAL\Connection $connection
+     * @param string $tableName Название таблицы
+     * @return bool
+     * @throws \Exception
+     */
+    public function clearTable($connection, $tableName)
+    {
+        $exceptTables = array_keys($this->configurator->getConfig('exceptValues'));
+
+        if (in_array($tableName, $exceptTables)) {
+            $except = $this->configurator->getConfig('exceptValues');
+            $rows = $except[$tableName];
+            $fieldName = key($rows);
+            $ids = implode(',', $rows[$fieldName]);
+
+            $sql = "DELETE FROM {$tableName} WHERE {$fieldName} NOT IN ({$ids});";
+            $stmt = $connection->prepare($sql);
+
+            if ($stmt->execute() == 1) {
+                return true;
+            }
+        }
+
+        $sql = "TRUNCATE table {$tableName};";
+        $stmt = $connection->prepare($sql);
+
+        if ($stmt->execute() == 1) {
+            return true;
+        }
+
+        throw new \Exception("Error when clear table {$tableName} db. $res", 1);
     }
 
     /**
@@ -159,10 +201,9 @@ class Copier
      */
     protected function getChunk($tableName)
     {
-        $limit = self::LIMIT;
-        $data = $this->masterConnection->fetchAll("SELECT * FROM {$tableName} LIMIT {$limit} OFFSET {$this->offset} ");
+        $data = $this->masterConnection->fetchAll("SELECT * FROM {$tableName} LIMIT {$this->limit} OFFSET {$this->offset}");
 
-        $this->offset += self::LIMIT;
+        $this->offset += $this->limit;
         return $data;
     }
 
@@ -194,6 +235,27 @@ class Copier
                 throw $e;
             }
         }
+    }
+
+
+    /**
+     * Делаем дамп бд
+     *
+     * @param \Doctrine\DBAL\Connection $connection
+     * @return bool
+     */
+    protected function makeDump($connection)
+    {
+        $params = $connection->getParams();
+        $path = $this->configurator->getConfig('testDumpPath');
+
+        $res = system("mysqldump -u{$params['user']} -p{$params['password']} {$params['dbname']} > {$path}dump_{$params['dbname']}.sql", $retval);
+
+        if ($retval == 0) {
+            return true;
+        }
+
+        throw new \Exception("Error when creating the dump for {$params['dbname']} db. $res", 1);
     }
 
     /**
@@ -265,6 +327,42 @@ class Copier
         return $insertArray;
     }
 
+    /**
+     * Конфигурируем скрипт
+     *
+     * @return void
+     */
+    private function configure()
+    {
+        switch ($this->configurator->getConfig('highload')) {
+            case 'low':
+                $this->limit = 20;
+                break;
+
+            case 'middle':
+                $this->limit = 200;
+                break;
+
+            case 'hard':
+                $this->limit = 500;
+                break;
+
+            case 'full':
+                $this->limit = 2500;
+                break;
+
+            default:
+                $this->limit = 200;
+                break;
+        }
+    }
+
+    /**
+     * Вывод текста в консоль и лог
+     *
+     * @param string $text
+     * @return void
+     */
     private function output($text)
     {
         if ($this->configurator->config['advancedLog'] == true) {
